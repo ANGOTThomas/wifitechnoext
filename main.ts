@@ -1,5 +1,6 @@
 //% color=#FF00FF <icon="\uf1eb" block="Wifi Techno"
 namespace WifiTechno {
+    let buffer = ""
     let isWifiConnected = false;
     /**
      * Setup Grove - Uart WiFi V2 to connect to  Wi-Fi
@@ -20,18 +21,41 @@ namespace WifiTechno {
             baudRate
         )
 
+        sendAtCmd("AT+RESTORE")
+        result = waitAtResponse("OK", "ERROR", "None", 1000)
+
+        serial.redirect(
+            txPin,
+            rxPin,
+            baudRate
+        )
+
         sendAtCmd("AT")
         result = waitAtResponse("OK", "ERROR", "None", 1000)
+        basic.showString("AT", 200)
+        basic.showNumber(result)
+
+        sendAtCmd("ATE0")
+        result = waitAtResponse("OK", "ERROR", "None", 1000)
+        basic.showString("ATE0", 200)
+        basic.showNumber(result)
 
         sendAtCmd("AT+CWMODE=1")
         result = waitAtResponse("OK", "ERROR", "None", 1000)
+        basic.showString("M", 200)
+        basic.showNumber(result)
 
         sendAtCmd("AT+CWDHCP=1,3")
         result = waitAtResponse("OK", "ERROR", "None", 1000)
+        basic.showString("D", 200)
+        basic.showNumber(result)
 
         sendAtCmd(`AT+CWJAP="${ssid}","${passwd}"`)
         result = waitAtResponse("WIFI GOT IP", "ERROR", "None", 20000)
+        basic.showString("W", 200)
+        basic.showNumber(result)
 
+       
         if (result == 1) {
             isWifiConnected = true
         }
@@ -59,20 +83,51 @@ namespace WifiTechno {
             baudRate
         )
 
+        sendAtCmd("AT+RESTORE")
+        result = waitAtResponse("READY", "ERROR", "None", 1000)
+
+        serial.redirect(
+            txPin,
+            rxPin,
+            baudRate
+        )
+
         sendAtCmd("AT")
         result = waitAtResponse("OK", "ERROR", "None", 1000)
+        basic.showString("AT", 200)
+        basic.showNumber(result)
+
+        sendAtCmd("ATE0")
+        result = waitAtResponse("OK", "ERROR", "None", 1000)
+        basic.showString("ATE0", 200)
+        basic.showNumber(result)
+        
 
         sendAtCmd("AT+CWMODE=1")
         result = waitAtResponse("OK", "ERROR", "None", 1000)
+        basic.showString("M", 200)
+        basic.showNumber(result)
 
+        
         sendAtCmd("AT+CWDHCP=0,3")
         result = waitAtResponse("OK", "ERROR", "None", 1000)
+        basic.showString("D", 200)
+        basic.showNumber(result)
 
         sendAtCmd("AT+CIPSTA=\"" + adresseip + "\",\"" + gateway + "\",\"" + masquesr + "\"")
         result = waitAtResponse("OK", "ERROR", "None", 1000)
-
+        basic.showString("IPF", 200)
+        basic.showNumber(result)
+   
         sendAtCmd(`AT+CWJAP="${ssid}","${passwd}"`)
         result = waitAtResponse("WIFI CONNECTED", "ERROR", "None", 20000)
+        basic.showString("W", 200)
+        basic.showNumber(result)
+        
+        sendAtCmd('AT+CIPDNS=1,"8.8.8.8"')
+        result = waitAtResponse("OK", "ERROR", "None", 1000)
+        basic.showString("DNS", 200)
+        basic.showNumber(result)
 
         if (result == 1) {
             isWifiConnected = true
@@ -106,11 +161,30 @@ namespace WifiTechno {
         }
 
         while (isWifiConnected && retry > 0) {
+
+            basic.showString("TS",200)
             retry = retry - 1;
+
+            sendAtCmd("ATE0")
+            result = waitAtResponse("OK", "ERROR", "None", 1000)
+            basic.showString("ATE0", 200)
+            basic.showNumber(result)
+            
+            sendAtCmd("AT+CIPMUX=0")
+            result = waitAtResponse("OK", "ERROR", "None", 1000)
+            basic.showString("MUX", 200)
+            basic.showNumber(result)
+
             // establish TCP connection
-            sendAtCmd("AT+CIPSTART=\"TCP\",\"api.thingspeak.com\",80")
-            result = waitAtResponse("OK", "ALREADY CONNECTED", "ERROR", 2000)
+            //sendAtCmd("AT+CIPSTART=\"TCP\",\"api.thingspeak.com\",80")
+            sendAtCmd('AT+CIPSTART="TCP","api.thingspeak.com",80')
+            result = waitAtResponse("CONNECT","OK", "ERROR", 5000)
+            basic.showString("TCP", 200)
+            basic.showNumber(result)
+        
             if (result == 3) continue
+            
+        
 
             let data = "GET /update?api_key=" + apiKey
             if (!isNaN(field1)) data = data + "&field1=" + field1
@@ -121,12 +195,20 @@ namespace WifiTechno {
             if (!isNaN(field6)) data = data + "&field6=" + field6
             if (!isNaN(field7)) data = data + "&field7=" + field7
             if (!isNaN(field8)) data = data + "&field8=" + field8
+            data = data + "\u000D\u000A"
 
-            sendAtCmd("AT+CIPSEND=" + (data.length + 2))
-            result = waitAtResponse(">", "OK", "ERROR", 2000)
+            sendAtCmd("AT+CIPSEND=" + (data.length+2))
+            basic.showString("dl", 200)
+            basic.showNumber(data.length)
+            result = waitAtResponse(">", "OK", "ERROR", 1000)
+            basic.showString("L", 200)
+            basic.showNumber(result)
             if (result == 3) continue
+            
             sendAtCmd(data)
-            result = waitAtResponse("SEND OK", "SEND FAIL", "ERROR", 5000)
+            result = waitAtResponse("Recv", "SEND FAIL", "ERROR", 5000)
+            basic.showString("D", 200)
+            basic.showNumber(result)
 
             // // close the TCP connection
             // sendAtCmd("AT+CIPCLOSE")
@@ -192,19 +274,22 @@ namespace WifiTechno {
 
 
     function waitAtResponse(target1: string, target2: string, target3: string, timeout: number) {
-        let buffer = ""
+        buffer = ""
         let start = input.runningTime()
 
         while ((input.runningTime() - start) < timeout) {
+            
             buffer += serial.readString()
-
+            grove.lcd_show_string("                ", 0, 0)
+            grove.lcd_show_string(buffer, 0, 0)
             if (buffer.includes(target1)) return 1
             if (buffer.includes(target2)) return 2
             if (buffer.includes(target3)) return 3
 
             basic.pause(100)
-        }
-
+            }
+        
+        
         return 0
     }
 
@@ -212,3 +297,4 @@ namespace WifiTechno {
         serial.writeString(cmd + "\u000D\u000A")
     }
 }
+
